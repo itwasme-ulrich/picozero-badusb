@@ -1,10 +1,26 @@
 # Raspberry Pi Pico BadUSB
+> **⚠️ This is a *fork* of `kacperbartocha/pico‑badusb`.**  
+> It adds Module for write log and control RGB LED WS2812 on RP2040-Zero board
+> For the original project see <https://github.com/kacperbartocha/pico‑badusb>.
+
+<p align="center">
+  <img src="./rp2040-zero.png" alt="rp2040-zero" width="150">
+</p>
+
 Pico BadUSB is a simple implementation of the [BadUSB](https://en.wikipedia.org/wiki/BadUSB) idea. The features it has will certainly prove themselves in most of the less and more demanding tasks. What characterizes Pico BadUSB is a simple [setup](https://github.com/kacperbartocha/pico-badusb#setup). Additionally, it uses a similar syntax as [DuckyScript](https://docs.hak5.org/hak5-usb-rubber-ducky/duckyscript-tm-quick-reference), so writing the payload will be more intuitive for experienced Rubber Ducky users.
 
 If you want to learn more about the Raspberry Pi Pico, refer to the [documentation](https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-python-sdk.pdf) or visit the [website](https://projects.raspberrypi.org/en/projects/getting-started-with-the-pico).
 
 ## Overview
 The program was created to emulate USB devices, particularly keyboards, for the purpose of automating tasks by executing prepared payloads. Pico BadUSB was designed for use with Raspberry Pi Pico boards, such as the Pico, Pico W and Pico 2, but the program should also work on most boards that support CircuitPython. The ```Pico BadUSB v2.0.0``` release includes ```uf2``` files, which are used for setup purposes. They contain a build of customized ```CircuitPython 9.2.0``` with custom packages and filesystem initialization instructions for selected keyboard layouts such as ```QWERTY```, ```QWERTZ``` and ```AZERTY```.
+
+## What’s different in this fork?
+| Feature | Upstream | This fork |
+|---------|----------|-----------|
+| WS2812 RGB LED support (GP25) | ✗ | ✓ |
+| Simplified payload logging (`main_out.txt`) | ✗ | ✓ |
+| Tested on RP2040‑Zero | ? | ✓ |
+
 
 ## Setup
 To correctly setup the device, hold the Boot Select ```BOOTSEL``` button while plugging the ```micro USB``` cable into the microcontroller. Once the device is detected by the system, drag and drop the ```uf2``` file of your choice onto the media, e.g. ```pico-badusb.uf2``` for the default ```QWERTY``` layout. After a moment, the device will reappear in the system with all the necessary files ready to go.
@@ -100,7 +116,7 @@ Keycodes allow you to refer to a key that cannot be represented as an ASCII char
 #### Lock Keys
 ```CAPSLOCK``` ```NUMLOCK``` ```SCROLLOCK```
 
-### Example
+### Example - Rick...
 The following example demonstrates the full functionality of Pico BadUSB. First, it activates the built-in LED, then, using [Windows](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands) features, we open the defined link in the default browser. Finally, the LED turns off.
 
 ```text
@@ -109,13 +125,53 @@ DELAY 1000
 LED ON
 HOTKEY GUI R
 DELAY 500
-STRING cmd.exe
-PRESS ENTER
-DELAY 500
-STRING start https://youtu.be/dQw4w9WgXcQ
+STRING https://youtu.be/dQw4w9WgXcQ
 PRESS ENTER
 LED OFF
 ```
+
+### Example – Add WS2812 support & log file
+
+This fork bundles a tiny helper (`ex_module.py`) that lets you drive a single
+WS2812 (a.k.a. NeoPixel) on **GP16** and write logs safely even when the
+USB mass‑storage drive is disabled.
+
+#### 1. Flash & mount
+
+1. Flash the UF2 (either upstream or the custom build from this fork).
+2. After reset, the Pico exposes a **BADUSB** (CIRCUITPY) drive.
+
+#### 2. Copy helper module
+
+```bash
+cp ex_module.py /Volumes/BADUSB/          # macOS / Linux  
+# or simply drag‑and‑drop in your file explorer
+```
+#### 3. Replace main.py
+
+```python
+from badusb.command import Command
+import ex_module                       # helper you just copied
+
+neoled = ex_module.WS2812(
+    num_leds=1,        # number of diodes in the strip
+    pin=16,            # GP16 on Pico
+    brightness=0.1     # global brightness 0.0‑1.0
+)
+logger = ex_module.WriteFile(filename="main_out.txt")
+
+if __name__ == "__main__":
+    logger.write_log("Starting main.py", mode="w")   # fresh log
+    neoled.set_all_colors(255, 255, 255)             # white flash
+    Command().execute("payload.txt")                 # run BadUSB payload
+```
+#### 4. Run
+- Eject the BADUSB drive (to avoid write‑lock issues).
+- Press the Pico’s reset button.
+- The LED should flash white for a split second.
+- After the payload finishes, check main_out.txt for log lines.
+
+
 
 ## Other features
 The functionality of the Pico BadUSB tool can be extended by creating a physical connection between individual pins as well as by making custom changes within the module's source code.
